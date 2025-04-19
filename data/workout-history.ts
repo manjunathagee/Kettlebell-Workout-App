@@ -9,6 +9,7 @@ export interface WorkoutEntry {
   totalWeight: number
   duration: number // in seconds
   exercise: string
+  isBodyweight?: boolean // New field to track bodyweight exercises
 }
 
 // Calculate statistics from workout history
@@ -22,14 +23,16 @@ export const calculateStatistics = (history: WorkoutEntry[]) => {
   // Average weight per workout
   const avgWeightPerWorkout = totalWorkouts > 0 ? totalWeightLifted / totalWorkouts : 0
 
-  // Most used weight
-  const weightCounts = history.reduce(
-    (counts, entry) => {
-      counts[entry.weight] = (counts[entry.weight] || 0) + 1
-      return counts
-    },
-    {} as Record<number, number>,
-  )
+  // Most used weight (excluding bodyweight exercises)
+  const weightCounts = history
+    .filter((entry) => !entry.isBodyweight && entry.weight > 0)
+    .reduce(
+      (counts, entry) => {
+        counts[entry.weight] = (counts[entry.weight] || 0) + 1
+        return counts
+      },
+      {} as Record<number, number>,
+    )
 
   const mostUsedWeight = Object.entries(weightCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 0
 
@@ -65,6 +68,9 @@ export const calculateStatistics = (history: WorkoutEntry[]) => {
 
   const mostCommonExercise = Object.entries(exerciseCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || ""
 
+  // Count bodyweight exercises
+  const bodyweightCount = history.filter((entry) => entry.isBodyweight).length
+
   return {
     totalWeightLifted,
     totalWorkouts,
@@ -73,5 +79,6 @@ export const calculateStatistics = (history: WorkoutEntry[]) => {
     mostCommonExercise,
     workoutsByDay: workoutsByDayData,
     weightOverTime,
+    bodyweightCount,
   }
 }

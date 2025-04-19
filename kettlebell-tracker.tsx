@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { Dumbbell, Clock, RotateCcw, Play, Pause, SkipForward, X, Plus } from "lucide-react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { Dumbbell, Clock, RotateCcw, Play, Pause, SkipForward, X, Plus, User, Moon, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -10,16 +10,26 @@ import { cn } from "@/lib/utils"
 import { WorkoutHistory } from "./components/workout-history"
 import { WorkoutStats } from "./components/workout-stats"
 import { WorkoutCalendar } from "./components/workout-calendar"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { type WorkoutEntry, calculateStatistics } from "./data/workout-history"
 import { useToast } from "@/components/ui/use-toast"
 import { PWARegister } from "./components/pwa-register"
 import { DataExport } from "./components/data-export"
 import { CircularProgress } from "./components/circular-progress"
-import { ThemeSelector } from "./components/theme-selector"
+import { CustomExerciseDialog } from "./components/custom-exercise-dialog"
+import { useTheme } from "next-themes"
+import { Switch } from "@/components/ui/switch"
 
-// Available exercise types
-const exerciseTypes = [
+// Default exercise types
+const defaultExerciseTypes = [
   "Swing",
   "Clean",
   "Press",
@@ -31,18 +41,22 @@ const exerciseTypes = [
   "Lunge",
 ]
 
-// LocalStorage key
+// LocalStorage keys
 const STORAGE_KEY = "kettlebell-tracker-data"
+const CUSTOM_EXERCISES_KEY = "kettlebell-tracker-custom-exercises"
 
 // Rest time increment options
 const REST_TIME_INCREMENTS = [10, 30, 60]
 
 export default function KettlebellTracker() {
+  // Add isBodyweight state
+  const [isBodyweight, setIsBodyweight] = useState(false)
   const [weight, setWeight] = useState(24)
   const [reps, setReps] = useState(10)
   const [sets, setSets] = useState(3)
   const [delay, setDelay] = useState(60)
   const [exercise, setExercise] = useState("Swing")
+  const [customExercises, setCustomExercises] = useState<string[]>([])
 
   // Workout state
   const [isWorkoutActive, setIsWorkoutActive] = useState(false)
@@ -64,6 +78,7 @@ export default function KettlebellTracker() {
   const notificationSound = useRef<HTMLAudioElement | null>(null)
 
   const { toast } = useToast()
+  const { setTheme, theme } = useTheme()
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Initialize notification sound
@@ -158,6 +173,16 @@ export default function KettlebellTracker() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedWorkouts))
   }
 
+  // Handle custom exercises change - use a stable reference
+  const handleCustomExercisesChange = useCallback((exercises: string[]) => {
+    setCustomExercises(exercises)
+  }, [])
+
+  // Toggle light/dark mode
+  const toggleTheme = () => {
+    setTheme(theme === "dark" ? "light" : "dark")
+  }
+
   // Start the workout
   const startWorkout = () => {
     setIsWorkoutActive(true)
@@ -177,19 +202,23 @@ export default function KettlebellTracker() {
       const endTime = new Date()
       const duration = Math.floor((endTime.getTime() - workoutStartTime.getTime()) / 1000)
       const completedSets = currentSet - 1
-      const totalWeight = weight * reps * completedSets
+      // Use 0 for weight if bodyweight exercise
+      const actualWeight = isBodyweight ? 0 : weight
+      // For bodyweight exercises, just count reps
+      const totalWeight = isBodyweight ? 0 : actualWeight * reps * completedSets
 
       // Create workout entry
       const workout: WorkoutEntry = {
         id: `workout-${Date.now()}`,
         date: new Date().toISOString(),
-        weight,
+        weight: actualWeight,
         reps,
         sets,
         completedSets,
         totalWeight,
         duration,
         exercise,
+        isBodyweight,
       }
 
       // Save workout
@@ -259,12 +288,18 @@ export default function KettlebellTracker() {
   // Calculate progress percentage for rest timer
   const restProgress = isResting ? ((delay - timeRemaining) / delay) * 100 : 0
 
+  // Combine default and custom exercises
+  const allExercises = [...defaultExerciseTypes, ...customExercises]
+
   return (
     <div className="flex flex-col min-h-screen bg-background p-2 sm:p-4">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <h1 className="text-xl sm:text-2xl font-bold">Kettlebell Tracker</h1>
         <div className="flex items-center gap-2">
-          <ThemeSelector />
+          <Button variant="outline" size="icon" onClick={toggleTheme} className="h-8 w-8">
+            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            <span className="sr-only">Toggle theme</span>
+          </Button>
           <PWARegister />
           <DataExport workouts={workoutHistory} onImport={importWorkoutData} />
           <Button variant="ghost" size="icon" onClick={clearWorkoutData}>
@@ -319,8 +354,14 @@ export default function KettlebellTracker() {
                 <div className="flex flex-col items-center gap-2">
                   <span className="text-base sm:text-lg font-medium text-primary">{exercise}</span>
                   <div className="flex justify-center items-center gap-4">
-                    <Dumbbell className="h-6 sm:h-8 w-6 sm:w-8 text-primary" />
-                    <span className="text-2xl sm:text-3xl font-bold">{weight}kg</span>
+                    {isBodyweight ? (
+                      <User className="h-6 sm:h-8 w-6 sm:w-6 text-primary" />
+                    ) : (
+                      <>
+                        <Dumbbell className="h-6 sm:h-8 w-6 sm:w-8 text-primary" />
+                        <span className="text-2xl sm:text-3xl font-bold">{weight}kg</span>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -389,43 +430,75 @@ export default function KettlebellTracker() {
             <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
               {/* Exercise Type Selection */}
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Dumbbell className="h-5 w-5 text-muted-foreground" />
-                  <h3 className="font-medium">Exercise</h3>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Dumbbell className="h-5 w-5 text-muted-foreground" />
+                    <h3 className="font-medium">Exercise</h3>
+                  </div>
+                  <CustomExerciseDialog onExercisesChange={handleCustomExercisesChange} />
                 </div>
                 <Select value={exercise} onValueChange={setExercise}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select exercise" />
                   </SelectTrigger>
                   <SelectContent>
-                    {exerciseTypes.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
+                    <SelectGroup>
+                      <SelectLabel>Default Exercises</SelectLabel>
+                      {defaultExerciseTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+
+                    {customExercises.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel>Custom Exercises</SelectLabel>
+                        {customExercises.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Weight Selection */}
-              <div className="space-y-2">
+              {/* Bodyweight toggle */}
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Dumbbell className="h-5 w-5 text-muted-foreground" />
-                  <h3 className="font-medium">Weight</h3>
+                  <User className="h-5 w-5 text-muted-foreground" />
+                  <h3 className="font-medium">Bodyweight Exercise</h3>
                 </div>
-                <div className="grid grid-cols-4 gap-2">
-                  {[12, 24, 32, 40].map((w) => (
-                    <Button
-                      key={w}
-                      variant={weight === w ? "default" : "outline"}
-                      onClick={() => setWeight(w)}
-                      className={cn("h-10 sm:h-12", weight === w && "bg-primary text-primary-foreground")}
-                    >
-                      {w}kg
-                    </Button>
-                  ))}
-                </div>
+                <Switch
+                  checked={isBodyweight}
+                  onCheckedChange={setIsBodyweight}
+                  aria-label="Toggle bodyweight exercise"
+                />
               </div>
+
+              {/* Weight Selection - only show if not bodyweight */}
+              {!isBodyweight && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Dumbbell className="h-5 w-5 text-muted-foreground" />
+                    <h3 className="font-medium">Weight</h3>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[12, 24, 32, 40].map((w) => (
+                      <Button
+                        key={w}
+                        variant={weight === w ? "default" : "outline"}
+                        onClick={() => setWeight(w)}
+                        className="h-10 sm:h-12"
+                      >
+                        {w}kg
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Reps Selection */}
               <div className="space-y-2">
