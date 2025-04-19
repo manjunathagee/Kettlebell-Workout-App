@@ -201,7 +201,8 @@ export default function KettlebellTracker() {
     if (currentSet > 1 && workoutStartTime) {
       const endTime = new Date()
       const duration = Math.floor((endTime.getTime() - workoutStartTime.getTime()) / 1000)
-      const completedSets = currentSet - 1
+      // If the workout is ending normally (not canceled early), count the current set as completed
+      const completedSets = isResting ? currentSet - 1 : currentSet
       // Use 0 for weight if bodyweight exercise
       const actualWeight = isBodyweight ? 0 : weight
       // For bodyweight exercises, just count reps
@@ -239,6 +240,7 @@ export default function KettlebellTracker() {
       setCurrentSet((prev) => prev + 1)
       startRest()
     } else {
+      // This is the last set, mark it as completed before ending
       endWorkout()
     }
   }
