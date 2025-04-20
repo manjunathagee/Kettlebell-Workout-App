@@ -34,6 +34,7 @@ import { workoutService } from "./lib/data/workout-service"
 import { AuthForm } from "./components/auth/auth-form"
 import { UserProfile } from "./components/auth/user-profile"
 import { supabase } from "./lib/supabase"
+import { localStorageService } from "./lib/data/local-storage-service"
 
 // Default exercise types
 const defaultExerciseTypes = [
@@ -77,6 +78,9 @@ export default function KettlebellTracker() {
   // Tab state
   const [activeTab, setActiveTab] = useState("history")
 
+  // Online status state
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
+
   // Sound notification
   const notificationSound = useRef<HTMLAudioElement | null>(null)
 
@@ -100,9 +104,33 @@ export default function KettlebellTracker() {
     }
   }
 
+  // Function to handle offline mode for non-authenticated users
+  const handleOfflineMode = () => {
+    // If user is not authenticated and we're offline, load data from local storage
+    if (!user && !isOnline) {
+      const localWorkouts = localStorageService.getWorkouts()
+      setWorkoutHistory(localWorkouts)
+      setWorkoutStats(calculateStatistics(localWorkouts))
+
+      const localExercises = localStorageService.getCustomExercises()
+      setCustomExercises(localExercises)
+
+      toast({
+        title: "Offline Mode",
+        description: "You're using the app in offline mode with local data",
+      })
+    }
+  }
+
   // Load workout history from Supabase when user is authenticated
   useEffect(() => {
     const loadWorkoutHistory = async () => {
+      if (!user && !isOnline) {
+        handleOfflineMode()
+        setIsLoading(false)
+        return
+      }
+
       if (!user) {
         setWorkoutHistory([])
         setWorkoutStats(calculateStatistics([]))
@@ -132,7 +160,7 @@ export default function KettlebellTracker() {
     if (!isAuthLoading) {
       loadWorkoutHistory()
     }
-  }, [user, isAuthLoading, toast])
+  }, [user, isAuthLoading, toast, isOnline])
 
   // Save workout to Supabase
   const saveWorkout = async (workout: Omit<WorkoutEntry, "id">) => {
@@ -173,15 +201,11 @@ export default function KettlebellTracker() {
 
   // Clear all workout data
   const clearWorkoutData = async () => {
-    if (!user) return
-
     if (confirm("Are you sure you want to clear all workout data? This cannot be undone.")) {
       setIsLoading(true)
       try {
-        // Delete each workout individually
-        for (const workout of workoutHistory) {
-          await workoutService.deleteWorkout(workout.id)
-        }
+        // Use the new clearAllData function that handles both local and server data
+        await workoutService.clearAllData()
 
         setWorkoutHistory([])
         setWorkoutStats(calculateStatistics([]))
@@ -386,6 +410,47 @@ export default function KettlebellTracker() {
 
     checkAuth()
   }, [user])
+
+  // Add this to the useEffect that handles online/offline status
+  useEffect(() => {
+    setIsOnline(navigator.onLine)
+
+    const handleOnline = async () => {
+      setIsOnline(true)
+      toast({
+        title: "You're back online",
+        description: "Your data will sync automatically",
+      })
+
+      // Reload data from server when coming back online
+      if (user) {
+        try {
+          const workouts = await workoutService.getWorkouts()
+          setWorkoutHistory(workouts)
+          setWorkoutStats(calculateStatistics(workouts))
+        } catch (error) {
+          console.error("Error syncing data:", error)
+        }
+      }
+    }
+
+    const handleOffline = () => {
+      setIsOnline(false)
+      toast({
+        title: "You're offline",
+        description: "The app will continue to work with your saved data",
+        variant: "destructive",
+      })
+    }
+
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
+
+    return () => {
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
+    }
+  }, [user, toast])
 
   // If user is not authenticated, show auth form
   if (!isAuthLoading && !user) {

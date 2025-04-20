@@ -21,8 +21,24 @@ export function AuthForm() {
   const { toast } = useToast()
   const [justSignedUp, setJustSignedUp] = useState(false)
 
+  // Check if we're online
+  const isOnline = () => {
+    return navigator.onLine
+  }
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Check if we're online
+    if (!isOnline()) {
+      toast({
+        title: "You're offline",
+        description: "Please connect to the internet to sign in",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsLoading(true)
 
     try {
@@ -54,6 +70,17 @@ export function AuthForm() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Check if we're online
+    if (!isOnline()) {
+      toast({
+        title: "You're offline",
+        description: "Please connect to the internet to sign up",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsLoading(true)
 
     try {
@@ -85,6 +112,16 @@ export function AuthForm() {
   }
 
   const handleGoogleSignIn = async () => {
+    // Check if we're online
+    if (!isOnline()) {
+      toast({
+        title: "You're offline",
+        description: "Please connect to the internet to sign in with Google",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsGoogleLoading(true)
 
     try {
