@@ -38,7 +38,9 @@ export function CustomExerciseDialog({ onExercisesChange }: CustomExerciseDialog
 
       setIsLoading(true)
       try {
+        console.log("Loading custom exercises for user:", user.id)
         const exercises = await workoutService.getCustomExercises()
+        console.log("Loaded custom exercises:", exercises)
         setCustomExercises(exercises)
         onExercisesChange(exercises)
       } catch (error) {

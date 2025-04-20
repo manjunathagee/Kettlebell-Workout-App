@@ -1,5 +1,7 @@
 "use client"
 
+import { Switch } from "@/components/ui/switch"
+
 import { useState, useEffect, useRef, useCallback } from "react"
 import { Dumbbell, Clock, RotateCcw, Play, Pause, SkipForward, X, Plus, User, Moon, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -27,11 +29,11 @@ import { DataExport } from "./components/data-export"
 import { CircularProgress } from "./components/circular-progress"
 import { CustomExerciseDialog } from "./components/custom-exercise-dialog"
 import { useTheme } from "next-themes"
-import { Switch } from "@/components/ui/switch"
 import { useAuth } from "./lib/auth/auth-context"
 import { workoutService } from "./lib/data/workout-service"
 import { AuthForm } from "./components/auth/auth-form"
 import { UserProfile } from "./components/auth/user-profile"
+import { supabase } from "./lib/supabase"
 
 // Default exercise types
 const defaultExerciseTypes = [
@@ -110,7 +112,9 @@ export default function KettlebellTracker() {
 
       setIsLoading(true)
       try {
+        console.log("Loading workout history for user:", user.id)
         const workouts = await workoutService.getWorkouts()
+        console.log("Loaded workouts:", workouts)
         setWorkoutHistory(workouts)
         setWorkoutStats(calculateStatistics(workouts))
       } catch (error) {
@@ -142,14 +146,14 @@ export default function KettlebellTracker() {
     }
 
     try {
+      console.log("Saving workout:", workout)
       const savedWorkout = await workoutService.saveWorkout(workout)
+      console.log("Saved workout:", savedWorkout)
 
-      const updatedHistory = [savedWorkout, ...workoutHistory]
-      setWorkoutHistory(updatedHistory)
-
-      // Update stats
-      const updatedStats = calculateStatistics(updatedHistory)
-      setWorkoutStats(updatedStats)
+      // Reload workouts to ensure we have the latest data
+      const workouts = await workoutService.getWorkouts()
+      setWorkoutHistory(workouts)
+      setWorkoutStats(calculateStatistics(workouts))
 
       toast({
         title: "Workout saved!",
@@ -364,6 +368,22 @@ export default function KettlebellTracker() {
 
   // Combine default and custom exercises
   const allExercises = [...defaultExerciseTypes, ...customExercises]
+
+  // Debug user authentication status
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data, error } = await supabase.auth.getSession()
+      console.log("Auth session:", data.session, "Error:", error)
+
+      if (data.session) {
+        console.log("User is authenticated:", data.session.user.id)
+      } else {
+        console.log("User is not authenticated")
+      }
+    }
+
+    checkAuth()
+  }, [user])
 
   // If user is not authenticated, show auth form
   if (!isAuthLoading && !user) {
