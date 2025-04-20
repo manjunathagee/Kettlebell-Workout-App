@@ -32,33 +32,47 @@ export async function GET(request: Request) {
       if (data?.user) {
         console.log("Creating/updating user in callback route:", data.user.id)
 
-        const { error: userError } = await supabase.from("users").upsert(
-          {
-            id: data.user.id,
-            email: data.user.email || "",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "id" },
-        )
-
-        if (userError) {
-          console.error("Error ensuring user exists:", userError)
-        } else {
-          console.log("User record created/updated successfully in callback")
-        }
-
-        // Verify the user was created
-        const { data: verifyData, error: verifyError } = await supabase
+        // First check if user already exists
+        const { data: existingUser, error: checkError } = await supabase
           .from("users")
           .select("id")
           .eq("id", data.user.id)
           .single()
 
-        if (verifyError) {
-          console.error("Error verifying user creation in callback:", verifyError)
+        if (checkError && checkError.code !== "PGRST116") {
+          // PGRST116 is "no rows returned" error
+          console.error("Error checking if user exists:", checkError)
+        }
+
+        // If user doesn't exist, create it
+        if (!existingUser) {
+          const { error: insertError } = await supabase.from("users").insert({
+            id: data.user.id,
+            email: data.user.email || "",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+
+          if (insertError) {
+            console.error("Error creating user record:", insertError)
+          } else {
+            console.log("User record created successfully in callback")
+          }
+
+          // Verify the user was created
+          const { data: verifyData, error: verifyError } = await supabase
+            .from("users")
+            .select("id")
+            .eq("id", data.user.id)
+            .single()
+
+          if (verifyError) {
+            console.error("Error verifying user creation in callback:", verifyError)
+          } else {
+            console.log("User verified in users table from callback:", verifyData)
+          }
         } else {
-          console.log("User verified in users table from callback:", verifyData)
+          console.log("User already exists in users table")
         }
       }
     } catch (error) {

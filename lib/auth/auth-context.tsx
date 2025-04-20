@@ -33,6 +33,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  // Function to ensure user exists in the users table
+  const ensureUserExists = async (user: User) => {
+    try {
+      console.log("Ensuring user exists in users table:", user.id)
+
+      // Call the API endpoint to create the user record
+      const response = await fetch("/api/create-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          email: user.email,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        console.error("Error creating user record:", result.error)
+      } else {
+        console.log("User record creation result:", result)
+      }
+    } catch (error) {
+      console.error("Error in ensureUserExists:", error)
+    }
+  }
+
   useEffect(() => {
     const fetchSession = async () => {
       setIsLoading(true)
@@ -51,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSession(session)
           setUser(session.user)
 
-          // Check if user exists in the users table, if not create it
+          // Ensure user exists in the users table
           await ensureUserExists(session.user)
         }
       } catch (error) {
@@ -84,55 +113,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe()
     }
   }, [])
-
-  // Helper function to ensure user exists in users table
-  const ensureUserExists = async (user: User) => {
-    try {
-      console.log("Ensuring user exists in users table:", user.id)
-
-      // First check if user already exists
-      const { data, error } = await supabase.from("users").select("id").eq("id", user.id).single()
-
-      if (error && error.code !== "PGRST116") {
-        // PGRST116 is "no rows returned" error
-        console.error("Error checking if user exists:", error)
-      }
-
-      // If user doesn't exist, create it
-      if (!data) {
-        console.log("User doesn't exist, creating record for:", user.id)
-        const { error: insertError } = await supabase.from("users").insert({
-          id: user.id,
-          email: user.email || "",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-
-        if (insertError) {
-          console.error("Error creating user record:", insertError)
-        } else {
-          console.log("User record created successfully")
-        }
-      } else {
-        console.log("User already exists in users table")
-      }
-
-      // Verify the user was created
-      const { data: verifyData, error: verifyError } = await supabase
-        .from("users")
-        .select("id")
-        .eq("id", user.id)
-        .single()
-
-      if (verifyError) {
-        console.error("Error verifying user creation:", verifyError)
-      } else {
-        console.log("User verified in users table:", verifyData)
-      }
-    } catch (error) {
-      console.error("Error in ensureUserExists:", error)
-    }
-  }
 
   const signIn = async (email: string, password: string) => {
     try {

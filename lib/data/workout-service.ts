@@ -2,6 +2,59 @@ import { supabase } from "../supabase"
 import type { WorkoutEntry } from "./workout-types"
 
 export const workoutService = {
+  // Helper function to ensure user exists in the users table
+  async ensureUserExists(userId: string, email: string): Promise<boolean> {
+    try {
+      console.log("Ensuring user exists in users table:", userId)
+
+      // First check if user already exists
+      const { data, error } = await supabase.from("users").select("id").eq("id", userId).single()
+
+      if (error && error.code !== "PGRST116") {
+        // PGRST116 is "no rows returned" error
+        console.error("Error checking if user exists:", error)
+        return false
+      }
+
+      // If user doesn't exist, create it
+      if (!data) {
+        console.log("User doesn't exist, creating record for:", userId)
+        const { error: insertError } = await supabase.from("users").insert({
+          id: userId,
+          email: email || "",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+
+        if (insertError) {
+          console.error("Error creating user record:", insertError)
+          return false
+        }
+
+        // Verify the user was created
+        const { data: verifyData, error: verifyError } = await supabase
+          .from("users")
+          .select("id")
+          .eq("id", userId)
+          .single()
+
+        if (verifyError) {
+          console.error("Error verifying user creation:", verifyError)
+          return false
+        }
+
+        console.log("User record created successfully:", verifyData)
+      } else {
+        console.log("User already exists in users table")
+      }
+
+      return true
+    } catch (error) {
+      console.error("Error in ensureUserExists:", error)
+      return false
+    }
+  },
+
   // Get all workouts for the current user
   async getWorkouts(): Promise<WorkoutEntry[]> {
     try {
@@ -14,29 +67,11 @@ export const workoutService = {
 
       console.log("Getting workouts for user:", userData.user.id)
 
-      // First, verify the user exists in the users table
-      const { data: userExists, error: userExistsError } = await supabase
-        .from("users")
-        .select("id")
-        .eq("id", userData.user.id)
-        .single()
-
-      if (userExistsError) {
-        console.error("User does not exist in users table:", userExistsError)
-
-        // Try to create the user
-        console.log("Attempting to create user record")
-        const { error: insertError } = await supabase.from("users").insert({
-          id: userData.user.id,
-          email: userData.user.email || "",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-
-        if (insertError) {
-          console.error("Error creating user record:", insertError)
-          return []
-        }
+      // Ensure user exists in the users table
+      const userExists = await this.ensureUserExists(userData.user.id, userData.user.email || "")
+      if (!userExists) {
+        console.error("Failed to ensure user exists in users table")
+        return []
       }
 
       const { data, error } = await supabase
@@ -80,43 +115,10 @@ export const workoutService = {
 
       console.log("Saving workout for user:", userData.user.id, workout)
 
-      // First, verify the user exists in the users table
-      const { data: userExists, error: userExistsError } = await supabase
-        .from("users")
-        .select("id")
-        .eq("id", userData.user.id)
-        .single()
-
-      if (userExistsError) {
-        console.error("User does not exist in users table:", userExistsError)
-
-        // Try to create the user
-        console.log("Attempting to create user record before saving workout")
-        const { error: insertError } = await supabase.from("users").insert({
-          id: userData.user.id,
-          email: userData.user.email || "",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-
-        if (insertError) {
-          console.error("Error creating user record:", insertError)
-          throw new Error("Could not create user record")
-        }
-
-        // Verify the user was created
-        const { data: verifyData, error: verifyError } = await supabase
-          .from("users")
-          .select("id")
-          .eq("id", userData.user.id)
-          .single()
-
-        if (verifyError) {
-          console.error("Error verifying user creation:", verifyError)
-          throw new Error("Could not verify user creation")
-        } else {
-          console.log("User verified in users table:", verifyData)
-        }
+      // Ensure user exists in the users table
+      const userExists = await this.ensureUserExists(userData.user.id, userData.user.email || "")
+      if (!userExists) {
+        throw new Error("Failed to ensure user exists in users table")
       }
 
       // Create the workout object without any optional fields
@@ -214,29 +216,11 @@ export const workoutService = {
         return []
       }
 
-      // First, verify the user exists in the users table
-      const { data: userExists, error: userExistsError } = await supabase
-        .from("users")
-        .select("id")
-        .eq("id", userData.user.id)
-        .single()
-
-      if (userExistsError) {
-        console.error("User does not exist in users table:", userExistsError)
-
-        // Try to create the user
-        console.log("Attempting to create user record")
-        const { error: insertError } = await supabase.from("users").insert({
-          id: userData.user.id,
-          email: userData.user.email || "",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-
-        if (insertError) {
-          console.error("Error creating user record:", insertError)
-          return []
-        }
+      // Ensure user exists in the users table
+      const userExists = await this.ensureUserExists(userData.user.id, userData.user.email || "")
+      if (!userExists) {
+        console.error("Failed to ensure user exists in users table")
+        return []
       }
 
       const { data, error } = await supabase.from("custom_exercises").select("name").eq("user_id", userData.user.id)
@@ -262,29 +246,10 @@ export const workoutService = {
         throw new Error("User not authenticated")
       }
 
-      // First, verify the user exists in the users table
-      const { data: userExists, error: userExistsError } = await supabase
-        .from("users")
-        .select("id")
-        .eq("id", userData.user.id)
-        .single()
-
-      if (userExistsError) {
-        console.error("User does not exist in users table:", userExistsError)
-
-        // Try to create the user
-        console.log("Attempting to create user record")
-        const { error: insertError } = await supabase.from("users").insert({
-          id: userData.user.id,
-          email: userData.user.email || "",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-
-        if (insertError) {
-          console.error("Error creating user record:", insertError)
-          throw new Error("Could not create user record")
-        }
+      // Ensure user exists in the users table
+      const userExists = await this.ensureUserExists(userData.user.id, userData.user.email || "")
+      if (!userExists) {
+        throw new Error("Failed to ensure user exists in users table")
       }
 
       // Simple insert without returning data
