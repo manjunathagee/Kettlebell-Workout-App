@@ -1,21 +1,43 @@
+"use client"
+
+import { useState } from "react"
 import { format } from "date-fns"
-import { Dumbbell, User } from "lucide-react"
+import { Dumbbell, User, ChevronLeft, ChevronRight } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import type { WorkoutEntry } from "../data/workout-history"
 
 interface WorkoutHistoryProps {
   workouts: WorkoutEntry[]
   showDate?: boolean
+  itemsPerPage?: number
 }
 
-export function WorkoutHistory({ workouts, showDate = true }: WorkoutHistoryProps) {
+export function WorkoutHistory({ workouts, showDate = true, itemsPerPage = 5 }: WorkoutHistoryProps) {
+  const [currentPage, setCurrentPage] = useState(1)
+
   if (workouts.length === 0) {
     return <div className="text-center text-sm text-gray-500 py-8">No workout history available</div>
   }
 
+  // Calculate pagination
+  const totalPages = Math.ceil(workouts.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = Math.min(startIndex + itemsPerPage, workouts.length)
+  const currentWorkouts = workouts.slice(startIndex, endIndex)
+
+  // Handle page navigation
+  const goToNextPage = () => {
+    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+  }
+
+  const goToPrevPage = () => {
+    setCurrentPage((prev) => Math.max(prev - 1, 1))
+  }
+
   return (
     <div className="space-y-3 sm:space-y-4">
-      {workouts.map((workout) => (
+      {currentWorkouts.map((workout) => (
         <Card key={workout.id} className="overflow-hidden">
           <CardContent className="p-0">
             <div className="flex items-center border-b">
@@ -74,6 +96,40 @@ export function WorkoutHistory({ workouts, showDate = true }: WorkoutHistoryProp
           </CardContent>
         </Card>
       ))}
+
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <div className="text-xs text-muted-foreground">
+            Showing {startIndex + 1}-{endIndex} of {workouts.length}
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={goToPrevPage}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span className="sr-only">Previous page</span>
+            </Button>
+            <div className="text-xs">
+              Page {currentPage} of {totalPages}
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+              <span className="sr-only">Next page</span>
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

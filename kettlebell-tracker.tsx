@@ -47,6 +47,7 @@ const defaultExerciseTypes = [
   "Deadlift",
   "Row",
   "Lunge",
+  "Clean and Press", // Added Clean and Press
 ]
 
 // Rest time increment options
@@ -81,26 +82,52 @@ export default function KettlebellTracker() {
   // Online status state
   const [isOnline, setIsOnline] = useState(navigator.onLine)
 
-  // Sound notification
-  const notificationSound = useRef<HTMLAudioElement | null>(null)
+  // Audio context for sound
+  const audioContextRef = useRef<AudioContext | null>(null)
 
   const { toast } = useToast()
   const { setTheme, theme } = useTheme()
   const { user, isLoading: isAuthLoading } = useAuth()
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Initialize notification sound
-  useEffect(() => {
-    notificationSound.current = new Audio("/sounds/notification.mp3")
-  }, [])
-
-  // Play notification sound
+  // Play notification sound using Web Audio API
   const playNotificationSound = () => {
-    if (notificationSound.current) {
-      notificationSound.current.currentTime = 0
-      notificationSound.current.play().catch((error) => {
-        console.error("Error playing notification sound:", error)
-      })
+    try {
+      // Create AudioContext on demand (to comply with browser autoplay policies)
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+      }
+
+      const context = audioContextRef.current
+
+      // Create a double beep sound
+      const createBeep = (frequency: number, startTime: number, duration: number) => {
+        const oscillator = context.createOscillator()
+        const gainNode = context.createGain()
+
+        oscillator.connect(gainNode)
+        gainNode.connect(context.destination)
+
+        oscillator.type = "sine"
+        oscillator.frequency.value = frequency
+        gainNode.gain.value = 0.3
+
+        oscillator.start(startTime)
+        oscillator.stop(startTime + duration)
+
+        // Add a quick fade out to avoid clicks
+        gainNode.gain.setValueAtTime(0.3, startTime + duration - 0.05)
+        gainNode.gain.linearRampToValueAtTime(0, startTime + duration)
+      }
+
+      // Current time in the audio context
+      const now = context.currentTime
+
+      // Create two beeps with different frequencies
+      createBeep(800, now, 0.2)
+      createBeep(1000, now + 0.3, 0.2)
+    } catch (error) {
+      console.error("Error playing notification sound:", error)
     }
   }
 
@@ -299,6 +326,9 @@ export default function KettlebellTracker() {
   const endWorkout = () => {
     setIsWorkoutActive(false)
     if (timerRef.current) clearInterval(timerRef.current)
+
+    // Play notification sound when workout ends
+    playNotificationSound()
 
     // Only save if at least one set was completed
     if (currentSet > 1 && workoutStartTime) {
@@ -672,8 +702,8 @@ export default function KettlebellTracker() {
                     <Dumbbell className="h-5 w-5 text-muted-foreground" />
                     <h3 className="font-medium">Weight</h3>
                   </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[12, 24, 32, 40].map((w) => (
+                  <div className="grid grid-cols-5 gap-2">
+                    {[12, 16, 24, 32, 40].map((w) => (
                       <Button
                         key={w}
                         variant={weight === w ? "default" : "outline"}
