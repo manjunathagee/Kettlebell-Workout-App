@@ -19,7 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { type WorkoutEntry, calculateStatistics } from "./data/workout-history"
+import { calculateStatistics } from "./lib/data/workout-types"
+import type { WorkoutEntry } from "./lib/data/workout-types"
 import { useToast } from "@/components/ui/use-toast"
 import { PWARegister } from "./components/pwa-register"
 import { DataExport } from "./components/data-export"
@@ -27,6 +28,10 @@ import { CircularProgress } from "./components/circular-progress"
 import { CustomExerciseDialog } from "./components/custom-exercise-dialog"
 import { useTheme } from "next-themes"
 import { Switch } from "@/components/ui/switch"
+import { useAuth } from "./lib/auth/auth-context"
+import { workoutService } from "./lib/data/workout-service"
+import { AuthForm } from "./components/auth/auth-form"
+import { UserProfile } from "./components/auth/user-profile"
 
 // Default exercise types
 const defaultExerciseTypes = [
@@ -40,10 +45,6 @@ const defaultExerciseTypes = [
   "Row",
   "Lunge",
 ]
-
-// LocalStorage keys
-const STORAGE_KEY = "kettlebell-tracker-data"
-const CUSTOM_EXERCISES_KEY = "kettlebell-tracker-custom-exercises"
 
 // Rest time increment options
 const REST_TIME_INCREMENTS = [10, 30, 60]
@@ -79,6 +80,7 @@ export default function KettlebellTracker() {
 
   const { toast } = useToast()
   const { setTheme, theme } = useTheme()
+  const { user, isLoading: isAuthLoading } = useAuth()
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Initialize notification sound
@@ -96,40 +98,59 @@ export default function KettlebellTracker() {
     }
   }
 
-  // Load workout history from localStorage on initial render
+  // Load workout history from Supabase when user is authenticated
   useEffect(() => {
-    setIsLoading(true)
-    try {
-      const savedData = localStorage.getItem(STORAGE_KEY)
-      if (savedData) {
-        const parsedData = JSON.parse(savedData) as WorkoutEntry[]
-        setWorkoutHistory(parsedData)
-        setWorkoutStats(calculateStatistics(parsedData))
+    const loadWorkoutHistory = async () => {
+      if (!user) {
+        setWorkoutHistory([])
+        setWorkoutStats(calculateStatistics([]))
+        setIsLoading(false)
+        return
       }
-    } catch (error) {
-      console.error("Error loading workout data:", error)
+
+      setIsLoading(true)
+      try {
+        const workouts = await workoutService.getWorkouts()
+        setWorkoutHistory(workouts)
+        setWorkoutStats(calculateStatistics(workouts))
+      } catch (error) {
+        console.error("Error loading workout data:", error)
+        toast({
+          title: "Error loading data",
+          description: "Could not load your workout data. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    if (!isAuthLoading) {
+      loadWorkoutHistory()
+    }
+  }, [user, isAuthLoading, toast])
+
+  // Save workout to Supabase
+  const saveWorkout = async (workout: Omit<WorkoutEntry, "id">) => {
+    if (!user) {
       toast({
-        title: "Error loading data",
-        description: "Could not load your workout data. Please try again.",
+        title: "Authentication required",
+        description: "Please sign in to save your workout.",
         variant: "destructive",
       })
-    } finally {
-      setIsLoading(false)
+      return
     }
-  }, [toast])
 
-  // Save workout to localStorage
-  const saveWorkout = (workout: WorkoutEntry) => {
-    const updatedHistory = [workout, ...workoutHistory]
-    setWorkoutHistory(updatedHistory)
-
-    // Update stats
-    const updatedStats = calculateStatistics(updatedHistory)
-    setWorkoutStats(updatedStats)
-
-    // Save to localStorage
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedHistory))
+      const savedWorkout = await workoutService.saveWorkout(workout)
+
+      const updatedHistory = [savedWorkout, ...workoutHistory]
+      setWorkoutHistory(updatedHistory)
+
+      // Update stats
+      const updatedStats = calculateStatistics(updatedHistory)
+      setWorkoutStats(updatedStats)
+
       toast({
         title: "Workout saved!",
         description: `Completed ${workout.completedSets} sets of ${workout.exercise}`,
@@ -138,39 +159,91 @@ export default function KettlebellTracker() {
       console.error("Error saving workout:", error)
       toast({
         title: "Error saving workout",
-        description: "Could not save your workout. Storage might be full.",
+        description: "Could not save your workout. Please try again.",
         variant: "destructive",
       })
     }
   }
 
   // Clear all workout data
-  const clearWorkoutData = () => {
+  const clearWorkoutData = async () => {
+    if (!user) return
+
     if (confirm("Are you sure you want to clear all workout data? This cannot be undone.")) {
-      localStorage.removeItem(STORAGE_KEY)
-      setWorkoutHistory([])
-      setWorkoutStats(calculateStatistics([]))
-      toast({
-        title: "Data cleared",
-        description: "All workout data has been deleted",
-      })
+      setIsLoading(true)
+      try {
+        // Delete each workout individually
+        for (const workout of workoutHistory) {
+          await workoutService.deleteWorkout(workout.id)
+        }
+
+        setWorkoutHistory([])
+        setWorkoutStats(calculateStatistics([]))
+
+        toast({
+          title: "Data cleared",
+          description: "All workout data has been deleted",
+        })
+      } catch (error) {
+        console.error("Error clearing workout data:", error)
+        toast({
+          title: "Error clearing data",
+          description: "Could not clear your workout data. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
     }
   }
 
   // Import workout data
-  const importWorkoutData = (importedWorkouts: WorkoutEntry[]) => {
-    // Merge with existing workouts or replace them
-    const updatedWorkouts = [...importedWorkouts, ...workoutHistory]
-      // Remove duplicates based on id
-      .filter((workout, index, self) => index === self.findIndex((w) => w.id === workout.id))
-      // Sort by date, newest first
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  const importWorkoutData = async (importedWorkouts: WorkoutEntry[]) => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to import workout data.",
+        variant: "destructive",
+      })
+      return
+    }
 
-    setWorkoutHistory(updatedWorkouts)
-    setWorkoutStats(calculateStatistics(updatedWorkouts))
+    setIsLoading(true)
+    try {
+      // Save each imported workout to Supabase
+      for (const workout of importedWorkouts) {
+        await workoutService.saveWorkout({
+          date: workout.date,
+          exercise: workout.exercise,
+          weight: workout.weight,
+          reps: workout.reps,
+          sets: workout.sets,
+          completedSets: workout.completedSets,
+          totalWeight: workout.totalWeight,
+          duration: workout.duration,
+          isBodyweight: workout.isBodyweight,
+        })
+      }
 
-    // Save to localStorage
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedWorkouts))
+      // Reload workouts from Supabase
+      const workouts = await workoutService.getWorkouts()
+      setWorkoutHistory(workouts)
+      setWorkoutStats(calculateStatistics(workouts))
+
+      toast({
+        title: "Import successful",
+        description: `Imported ${importedWorkouts.length} workouts`,
+      })
+    } catch (error) {
+      console.error("Error importing workout data:", error)
+      toast({
+        title: "Error importing data",
+        description: "Could not import your workout data. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   // Handle custom exercises change - use a stable reference
@@ -209,8 +282,7 @@ export default function KettlebellTracker() {
       const totalWeight = isBodyweight ? 0 : actualWeight * reps * completedSets
 
       // Create workout entry
-      const workout: WorkoutEntry = {
-        id: `workout-${Date.now()}`,
+      const workout: Omit<WorkoutEntry, "id"> = {
         date: new Date().toISOString(),
         weight: actualWeight,
         reps,
@@ -293,6 +365,31 @@ export default function KettlebellTracker() {
   // Combine default and custom exercises
   const allExercises = [...defaultExerciseTypes, ...customExercises]
 
+  // If user is not authenticated, show auth form
+  if (!isAuthLoading && !user) {
+    return (
+      <div className="flex flex-col min-h-screen bg-background p-4 sm:p-6">
+        <div className="flex items-center justify-between mb-6 sm:mb-8">
+          <h1 className="text-xl sm:text-2xl font-bold">Kettlebell Tracker</h1>
+          <Button variant="outline" size="icon" onClick={toggleTheme} className="h-8 w-8">
+            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            <span className="sr-only">Toggle theme</span>
+          </Button>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <div className="w-full max-w-md mx-auto">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold mb-2">Welcome to Kettlebell Tracker</h2>
+              <p className="text-muted-foreground">Sign in or create an account to track your workouts in the cloud</p>
+            </div>
+            <AuthForm />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-background p-2 sm:p-4">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
@@ -307,6 +404,7 @@ export default function KettlebellTracker() {
           <Button variant="ghost" size="icon" onClick={clearWorkoutData}>
             <RotateCcw className="h-5 w-5" />
           </Button>
+          <UserProfile />
         </div>
       </div>
 

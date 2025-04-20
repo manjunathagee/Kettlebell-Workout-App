@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,9 +16,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/components/ui/use-toast"
-
-// LocalStorage key for custom exercises
-const CUSTOM_EXERCISES_KEY = "kettlebell-tracker-custom-exercises"
+import { workoutService } from "@/lib/data/workout-service"
+import { useAuth } from "@/lib/auth/auth-context"
 
 interface CustomExerciseDialogProps {
   onExercisesChange: (exercises: string[]) => void
@@ -28,51 +27,46 @@ export function CustomExerciseDialog({ onExercisesChange }: CustomExerciseDialog
   const [open, setOpen] = useState(false)
   const [newExercise, setNewExercise] = useState("")
   const [customExercises, setCustomExercises] = useState<string[]>([])
+  const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
-  const initialLoadRef = useRef(false)
-  const prevExercisesRef = useRef<string[]>([])
+  const { user } = useAuth()
 
-  // Load custom exercises from localStorage only once on mount
+  // Load custom exercises from Supabase
   useEffect(() => {
-    if (!initialLoadRef.current) {
-      initialLoadRef.current = true
+    const loadCustomExercises = async () => {
+      if (!user) return
+
+      setIsLoading(true)
       try {
-        const savedExercises = localStorage.getItem(CUSTOM_EXERCISES_KEY)
-        if (savedExercises) {
-          const parsedExercises = JSON.parse(savedExercises) as string[]
-          setCustomExercises(parsedExercises)
-          prevExercisesRef.current = parsedExercises
-          onExercisesChange(parsedExercises)
-        }
+        const exercises = await workoutService.getCustomExercises()
+        setCustomExercises(exercises)
+        onExercisesChange(exercises)
       } catch (error) {
         console.error("Error loading custom exercises:", error)
+        toast({
+          title: "Error loading exercises",
+          description: "Could not load your custom exercises.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
       }
     }
-  }, [onExercisesChange])
 
-  // Save custom exercises to localStorage
-  const saveCustomExercises = (exercises: string[]) => {
-    try {
-      localStorage.setItem(CUSTOM_EXERCISES_KEY, JSON.stringify(exercises))
-      setCustomExercises(exercises)
-
-      // Only call onExercisesChange if the exercises have actually changed
-      if (JSON.stringify(exercises) !== JSON.stringify(prevExercisesRef.current)) {
-        prevExercisesRef.current = exercises
-        onExercisesChange(exercises)
-      }
-    } catch (error) {
-      console.error("Error saving custom exercises:", error)
-      toast({
-        title: "Error saving exercises",
-        description: "Could not save your custom exercises.",
-        variant: "destructive",
-      })
-    }
-  }
+    loadCustomExercises()
+  }, [user, onExercisesChange, toast])
 
   // Add a new custom exercise
-  const handleAddExercise = () => {
+  const handleAddExercise = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to add custom exercises.",
+        variant: "destructive",
+      })
+      return
+    }
+
     if (!newExercise.trim()) {
       toast({
         title: "Exercise name required",
@@ -91,25 +85,57 @@ export function CustomExerciseDialog({ onExercisesChange }: CustomExerciseDialog
       return
     }
 
-    const updatedExercises = [...customExercises, newExercise.trim()]
-    saveCustomExercises(updatedExercises)
-    setNewExercise("")
+    setIsLoading(true)
+    try {
+      await workoutService.saveCustomExercise(newExercise.trim())
 
-    toast({
-      title: "Exercise added",
-      description: `"${newExercise.trim()}" has been added to your exercises.`,
-    })
+      const updatedExercises = [...customExercises, newExercise.trim()]
+      setCustomExercises(updatedExercises)
+      onExercisesChange(updatedExercises)
+      setNewExercise("")
+
+      toast({
+        title: "Exercise added",
+        description: `"${newExercise.trim()}" has been added to your exercises.`,
+      })
+    } catch (error) {
+      console.error("Error adding custom exercise:", error)
+      toast({
+        title: "Error adding exercise",
+        description: "Could not add your custom exercise.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   // Remove a custom exercise
-  const handleRemoveExercise = (exercise: string) => {
-    const updatedExercises = customExercises.filter((e) => e !== exercise)
-    saveCustomExercises(updatedExercises)
+  const handleRemoveExercise = async (exercise: string) => {
+    if (!user) return
 
-    toast({
-      title: "Exercise removed",
-      description: `"${exercise}" has been removed from your exercises.`,
-    })
+    setIsLoading(true)
+    try {
+      await workoutService.deleteCustomExercise(exercise)
+
+      const updatedExercises = customExercises.filter((e) => e !== exercise)
+      setCustomExercises(updatedExercises)
+      onExercisesChange(updatedExercises)
+
+      toast({
+        title: "Exercise removed",
+        description: `"${exercise}" has been removed from your exercises.`,
+      })
+    } catch (error) {
+      console.error("Error removing custom exercise:", error)
+      toast({
+        title: "Error removing exercise",
+        description: "Could not remove your custom exercise.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -137,13 +163,20 @@ export function CustomExerciseDialog({ onExercisesChange }: CustomExerciseDialog
                   handleAddExercise()
                 }
               }}
+              disabled={isLoading || !user}
             />
-            <Button onClick={handleAddExercise}>Add</Button>
+            <Button onClick={handleAddExercise} disabled={isLoading || !user}>
+              {isLoading ? "Adding..." : "Add"}
+            </Button>
           </div>
 
           <div>
             <Label className="text-sm font-medium mb-2 block">Your Custom Exercises</Label>
-            {customExercises.length === 0 ? (
+            {isLoading ? (
+              <div className="flex justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              </div>
+            ) : customExercises.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2">No custom exercises yet. Add one above.</p>
             ) : (
               <ScrollArea className="h-[200px] rounded-md border">
@@ -156,6 +189,7 @@ export function CustomExerciseDialog({ onExercisesChange }: CustomExerciseDialog
                         size="sm"
                         onClick={() => handleRemoveExercise(exercise)}
                         className="h-7 w-7 p-0"
+                        disabled={isLoading}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                         <span className="sr-only">Remove {exercise}</span>
