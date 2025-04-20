@@ -41,7 +41,7 @@ export const workoutService = {
     }
   },
 
-  // Save a new workout
+  // Save a new workout - simplified approach
   async saveWorkout(workout: Omit<WorkoutEntry, "id">): Promise<WorkoutEntry> {
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser()
@@ -52,89 +52,59 @@ export const workoutService = {
 
       console.log("Saving workout for user:", userData.user.id, workout)
 
-      // Generate a UUID for the workout to avoid conflicts
-      const workoutId = crypto.randomUUID()
+      // Create the workout object without any optional fields
+      const workoutData = {
+        user_id: userData.user.id,
+        date: workout.date,
+        exercise: workout.exercise,
+        weight: workout.weight,
+        reps: workout.reps,
+        sets: workout.sets,
+        completed_sets: workout.completedSets,
+        total_weight: workout.totalWeight,
+        duration: workout.duration,
+        is_bodyweight: workout.isBodyweight || false,
+      }
 
-      const { data, error } = await supabase
-        .from("workouts")
-        .insert({
-          id: workoutId,
-          user_id: userData.user.id,
-          date: workout.date,
-          exercise: workout.exercise,
-          weight: workout.weight,
-          reps: workout.reps,
-          sets: workout.sets,
-          completed_sets: workout.completedSets,
-          total_weight: workout.totalWeight,
-          duration: workout.duration,
-          is_bodyweight: workout.isBodyweight || false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single()
+      // Insert without returning data first
+      const { error } = await supabase.from("workouts").insert(workoutData)
 
       if (error) {
         console.error("Error saving workout:", error)
-
-        // If we get a conflict error, try a different approach
-        if (error.code === "23505" || error.status === 409) {
-          console.log("Conflict detected, trying alternative approach")
-
-          // Try without specifying the ID
-          const { data: retryData, error: retryError } = await supabase
-            .from("workouts")
-            .insert({
-              user_id: userData.user.id,
-              date: workout.date,
-              exercise: workout.exercise,
-              weight: workout.weight,
-              reps: workout.reps,
-              sets: workout.sets,
-              completed_sets: workout.completedSets,
-              total_weight: workout.totalWeight,
-              duration: workout.duration,
-              is_bodyweight: workout.isBodyweight || false,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .select()
-            .single()
-
-          if (retryError) {
-            console.error("Retry error saving workout:", retryError)
-            throw retryError
-          }
-
-          return {
-            id: retryData.id,
-            date: retryData.date,
-            exercise: retryData.exercise,
-            weight: retryData.weight,
-            reps: retryData.reps,
-            sets: retryData.sets,
-            completedSets: retryData.completed_sets,
-            totalWeight: retryData.total_weight,
-            duration: retryData.duration,
-            isBodyweight: retryData.is_bodyweight,
-          }
-        }
-
         throw error
       }
 
+      // Then fetch the latest workouts
+      const { data, error: fetchError } = await supabase
+        .from("workouts")
+        .select("*")
+        .eq("user_id", userData.user.id)
+        .eq("exercise", workout.exercise)
+        .eq("date", workout.date)
+        .order("created_at", { ascending: false })
+        .limit(1)
+
+      if (fetchError || !data || data.length === 0) {
+        console.error("Error fetching saved workout:", fetchError)
+        // Return a mock workout with generated ID if we can't fetch the saved one
+        return {
+          id: crypto.randomUUID(),
+          ...workout,
+        }
+      }
+
+      const savedWorkout = data[0]
       return {
-        id: data.id,
-        date: data.date,
-        exercise: data.exercise,
-        weight: data.weight,
-        reps: data.reps,
-        sets: data.sets,
-        completedSets: data.completed_sets,
-        totalWeight: data.total_weight,
-        duration: data.duration,
-        isBodyweight: data.is_bodyweight,
+        id: savedWorkout.id,
+        date: savedWorkout.date,
+        exercise: savedWorkout.exercise,
+        weight: savedWorkout.weight,
+        reps: savedWorkout.reps,
+        sets: savedWorkout.sets,
+        completedSets: savedWorkout.completed_sets,
+        totalWeight: savedWorkout.total_weight,
+        duration: savedWorkout.duration,
+        isBodyweight: savedWorkout.is_bodyweight,
       }
     } catch (error) {
       console.error("Error in saveWorkout:", error)
@@ -187,7 +157,7 @@ export const workoutService = {
     }
   },
 
-  // Save a custom exercise
+  // Save a custom exercise - simplified approach
   async saveCustomExercise(name: string): Promise<void> {
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser()
@@ -196,40 +166,14 @@ export const workoutService = {
         throw new Error("User not authenticated")
       }
 
-      // Generate a UUID for the exercise to avoid conflicts
-      const exerciseId = crypto.randomUUID()
-
+      // Simple insert without returning data
       const { error } = await supabase.from("custom_exercises").insert({
-        id: exerciseId,
         user_id: userData.user.id,
         name,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       })
 
       if (error) {
         console.error("Error saving custom exercise:", error)
-
-        // If we get a conflict error, try a different approach
-        if (error.code === "23505" || error.status === 409) {
-          console.log("Conflict detected, trying alternative approach")
-
-          // Try without specifying the ID
-          const { error: retryError } = await supabase.from("custom_exercises").insert({
-            user_id: userData.user.id,
-            name,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-
-          if (retryError) {
-            console.error("Retry error saving custom exercise:", retryError)
-            throw retryError
-          }
-
-          return
-        }
-
         throw error
       }
     } catch (error) {

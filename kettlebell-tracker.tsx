@@ -147,11 +147,13 @@ export default function KettlebellTracker() {
 
     try {
       console.log("Saving workout:", workout)
-      const savedWorkout = await workoutService.saveWorkout(workout)
-      console.log("Saved workout:", savedWorkout)
 
-      // Reload workouts to ensure we have the latest data
+      // First try to save the workout
+      await workoutService.saveWorkout(workout)
+
+      // Then reload all workouts regardless of the result
       const workouts = await workoutService.getWorkouts()
+      console.log("Reloaded workouts:", workouts)
       setWorkoutHistory(workouts)
       setWorkoutStats(calculateStatistics(workouts))
 
@@ -478,7 +480,7 @@ export default function KettlebellTracker() {
                       <User className="h-6 sm:h-8 w-6 sm:w-6 text-primary" />
                     ) : (
                       <>
-                        <Dumbbell className="h-6 sm:h-8 w-6 sm:w-8 text-primary" />
+                        <Dumbbell className="h-6 sm:h-8 w-6 sm:w-6 text-primary" />
                         <span className="text-2xl sm:text-3xl font-bold">{weight}kg</span>
                       </>
                     )}
