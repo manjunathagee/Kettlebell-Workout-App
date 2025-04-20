@@ -22,7 +22,28 @@ export async function GET(request: Request) {
   if (code) {
     try {
       const supabase = createServerSupabaseClient()
-      await supabase.auth.exchangeCodeForSession(code)
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+
+      if (error) {
+        throw error
+      }
+
+      // If we have a user, ensure they exist in the users table
+      if (data?.user) {
+        const { error: userError } = await supabase.from("users").upsert(
+          {
+            id: data.user.id,
+            email: data.user.email || "",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" },
+        )
+
+        if (userError) {
+          console.error("Error ensuring user exists:", userError)
+        }
+      }
     } catch (error) {
       console.error("Error exchanging code for session:", error)
       return NextResponse.redirect(new URL("/auth/verify?error=session_exchange_failed", requestUrl.origin))

@@ -38,6 +38,20 @@ export function AuthForm() {
           title: "Signed in successfully",
           description: "Welcome back!",
         })
+
+        // Ensure user exists in users table
+        const { data: userData } = await supabase.auth.getUser()
+        if (userData.user) {
+          await supabase.from("users").upsert(
+            {
+              id: userData.user.id,
+              email: userData.user.email || "",
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "id" },
+          )
+        }
       }
     } catch (error) {
       console.error("Sign in error:", error)
@@ -70,6 +84,19 @@ export function AuthForm() {
           title: "Sign up successful",
           description: "Please check your email to confirm your account",
         })
+
+        // Ensure user exists in users table
+        if (user) {
+          await supabase.from("users").upsert(
+            {
+              id: user.id,
+              email: user.email || "",
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "id" },
+          )
+        }
       }
     } catch (error) {
       console.error("Sign up error:", error)
@@ -88,7 +115,7 @@ export function AuthForm() {
     setIsLoading(true)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
@@ -104,6 +131,19 @@ export function AuthForm() {
           title: "Signed in successfully",
           description: "Your account has been verified!",
         })
+
+        // Ensure user exists in users table
+        if (data.user) {
+          await supabase.from("users").upsert(
+            {
+              id: data.user.id,
+              email: data.user.email || "",
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "id" },
+          )
+        }
       }
     } catch (error) {
       console.error("Verification error:", error)
