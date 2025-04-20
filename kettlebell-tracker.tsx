@@ -1,7 +1,6 @@
 "use client"
 
 import { Switch } from "@/components/ui/switch"
-
 import { useState, useEffect, useRef, useCallback } from "react"
 import { Dumbbell, Clock, RotateCcw, Play, Pause, SkipForward, X, Plus, User, Moon, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -35,6 +34,7 @@ import { AuthForm } from "./components/auth/auth-form"
 import { UserProfile } from "./components/auth/user-profile"
 import { getSupabase } from "./lib/supabase"
 import { localStorageService } from "./lib/data/local-storage-service"
+import { playNotificationSound } from "./lib/audio-utils"
 
 // Default exercise types
 const defaultExerciseTypes = [
@@ -82,54 +82,10 @@ export default function KettlebellTracker() {
   // Online status state
   const [isOnline, setIsOnline] = useState(navigator.onLine)
 
-  // Audio context for sound
-  const audioContextRef = useRef<AudioContext | null>(null)
-
   const { toast } = useToast()
   const { setTheme, theme } = useTheme()
   const { user, isLoading: isAuthLoading } = useAuth()
   const timerRef = useRef<NodeJS.Timeout | null>(null)
-
-  // Play notification sound using Web Audio API
-  const playNotificationSound = () => {
-    try {
-      // Create AudioContext on demand (to comply with browser autoplay policies)
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
-      }
-
-      const context = audioContextRef.current
-
-      // Create a double beep sound
-      const createBeep = (frequency: number, startTime: number, duration: number) => {
-        const oscillator = context.createOscillator()
-        const gainNode = context.createGain()
-
-        oscillator.connect(gainNode)
-        gainNode.connect(context.destination)
-
-        oscillator.type = "sine"
-        oscillator.frequency.value = frequency
-        gainNode.gain.value = 0.3
-
-        oscillator.start(startTime)
-        oscillator.stop(startTime + duration)
-
-        // Add a quick fade out to avoid clicks
-        gainNode.gain.setValueAtTime(0.3, startTime + duration - 0.05)
-        gainNode.gain.linearRampToValueAtTime(0, startTime + duration)
-      }
-
-      // Current time in the audio context
-      const now = context.currentTime
-
-      // Create two beeps with different frequencies
-      createBeep(800, now, 0.2)
-      createBeep(1000, now + 0.3, 0.2)
-    } catch (error) {
-      console.error("Error playing notification sound:", error)
-    }
-  }
 
   // Function to handle offline mode for non-authenticated users
   const handleOfflineMode = () => {

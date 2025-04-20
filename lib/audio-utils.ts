@@ -1,53 +1,39 @@
-// Base64 encoded short notification sound
-export const NOTIFICATION_SOUND_BASE64 =
-  "data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAFAAAGUACFhYWFhYWFhYWFhYWFhYWFhYWFvb29vb29vb29vb29vb29vb29vb3T09PT09PT09PT09PT09PT09PT0/////////////////////8AAAA8TEFNRTMuMTAwBEgAAAAAAAAAABUgJAMGQQABmgAABlAiznawAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//sQxAADwAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU="
-
-// Function to play a notification sound
+// Function to play a notification sound using Web Audio API
 export const playNotificationSound = () => {
   try {
-    // Try to use the base64 encoded sound
-    const audio = new Audio(NOTIFICATION_SOUND_BASE64)
-    audio.volume = 0.5
-    audio.play().catch((error) => {
-      console.error("Error playing base64 notification sound:", error)
-      playFallbackBeep()
-    })
-  } catch (error) {
-    console.error("Error creating audio from base64:", error)
-    playFallbackBeep()
-  }
-}
-
-// Fallback beep sound using Web Audio API
-export const playFallbackBeep = () => {
-  try {
+    // Create audio context
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-    const oscillator = audioContext.createOscillator()
+
+    // Create oscillator for first beep
+    const oscillator1 = audioContext.createOscillator()
     const gainNode = audioContext.createGain()
 
-    oscillator.connect(gainNode)
+    oscillator1.connect(gainNode)
     gainNode.connect(audioContext.destination)
 
-    oscillator.type = "sine"
-    oscillator.frequency.value = 800
-    gainNode.gain.value = 0.3
+    // Configure sound
+    oscillator1.type = "sine"
+    oscillator1.frequency.value = 800 // Hz
+    gainNode.gain.value = 0.5 // Volume
 
-    oscillator.start()
+    // Play first beep
+    oscillator1.start()
 
-    // Stop after 200ms
+    // Stop after 200ms and play second beep
     setTimeout(() => {
-      oscillator.stop()
-      // Play a second beep after a short pause
+      oscillator1.stop()
+
+      // Play second beep after a short pause
       setTimeout(() => {
         const oscillator2 = audioContext.createOscillator()
         oscillator2.connect(gainNode)
         oscillator2.type = "sine"
-        oscillator2.frequency.value = 1000
+        oscillator2.frequency.value = 1000 // Higher pitch for second beep
         oscillator2.start()
         setTimeout(() => oscillator2.stop(), 200)
-      }, 200)
+      }, 100)
     }, 200)
   } catch (error) {
-    console.error("Error playing fallback beep:", error)
+    console.error("Error playing notification sound:", error)
   }
 }
