@@ -30,6 +30,8 @@ export async function GET(request: Request) {
 
       // If we have a user, ensure they exist in the users table
       if (data?.user) {
+        console.log("Creating/updating user in callback route:", data.user.id)
+
         const { error: userError } = await supabase.from("users").upsert(
           {
             id: data.user.id,
@@ -42,6 +44,21 @@ export async function GET(request: Request) {
 
         if (userError) {
           console.error("Error ensuring user exists:", userError)
+        } else {
+          console.log("User record created/updated successfully in callback")
+        }
+
+        // Verify the user was created
+        const { data: verifyData, error: verifyError } = await supabase
+          .from("users")
+          .select("id")
+          .eq("id", data.user.id)
+          .single()
+
+        if (verifyError) {
+          console.error("Error verifying user creation in callback:", verifyError)
+        } else {
+          console.log("User verified in users table from callback:", verifyData)
         }
       }
     } catch (error) {

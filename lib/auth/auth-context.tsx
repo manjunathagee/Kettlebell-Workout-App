@@ -12,6 +12,7 @@ type AuthContextType = {
   isLoading: boolean
   signIn: (email: string, password: string) => Promise<{ error: any | null }>
   signUp: (email: string, password: string) => Promise<{ error: any | null; user: User | null }>
+  signInWithGoogle: () => Promise<{ error: any | null }>
   signOut: () => Promise<void>
 }
 
@@ -21,6 +22,7 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   signIn: async () => ({ error: null }),
   signUp: async () => ({ error: null, user: null }),
+  signInWithGoogle: async () => ({ error: null }),
   signOut: async () => {},
 })
 
@@ -65,6 +67,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state changed:", event, session?.user?.id)
+
       setSession(session)
       setUser(session?.user ?? null)
 
@@ -84,18 +88,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Helper function to ensure user exists in users table
   const ensureUserExists = async (user: User) => {
     try {
+      console.log("Ensuring user exists in users table:", user.id)
+
       // First check if user already exists
       const { data, error } = await supabase.from("users").select("id").eq("id", user.id).single()
 
       if (error && error.code !== "PGRST116") {
         // PGRST116 is "no rows returned" error
         console.error("Error checking if user exists:", error)
-        return
       }
 
       // If user doesn't exist, create it
       if (!data) {
-        console.log("Creating user record for:", user.id)
+        console.log("User doesn't exist, creating record for:", user.id)
         const { error: insertError } = await supabase.from("users").insert({
           id: user.id,
           email: user.email || "",
@@ -108,6 +113,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           console.log("User record created successfully")
         }
+      } else {
+        console.log("User already exists in users table")
+      }
+
+      // Verify the user was created
+      const { data: verifyData, error: verifyError } = await supabase
+        .from("users")
+        .select("id")
+        .eq("id", user.id)
+        .single()
+
+      if (verifyError) {
+        console.error("Error verifying user creation:", verifyError)
+      } else {
+        console.log("User verified in users table:", verifyData)
       }
     } catch (error) {
       console.error("Error in ensureUserExists:", error)
@@ -116,7 +136,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+
+      if (data.user && !error) {
+        await ensureUserExists(data.user)
+      }
+
       return { error }
     } catch (error) {
       console.error("Error signing in:", error)
@@ -144,22 +169,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // If sign up is successful, create a user record in our users table
       if (data.user && !error) {
-        const { error: insertError } = await supabase.from("users").insert({
-          id: data.user.id,
-          email: data.user.email!,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-
-        if (insertError) {
-          console.error("Error creating user record:", insertError)
-        }
+        await ensureUserExists(data.user)
       }
 
       return { error, user: data.user }
     } catch (error) {
       console.error("Error signing up:", error)
       return { error, user: null }
+    }
+  }
+
+  const signInWithGoogle = async () => {
+    try {
+      // Determine the correct redirect URL
+      let redirectUrl = `${window.location.origin}/auth/callback`
+
+      // If we're in development but want to test with a specific URL
+      if (process.env.NEXT_PUBLIC_SITE_URL) {
+        redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
+      }
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: redirectUrl,
+        },
+      })
+
+      return { error }
+    } catch (error) {
+      console.error("Error signing in with Google:", error)
+      return { error }
     }
   }
 
@@ -173,6 +213,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoading,
     signIn,
     signUp,
+    signInWithGoogle,
     signOut,
   }
 

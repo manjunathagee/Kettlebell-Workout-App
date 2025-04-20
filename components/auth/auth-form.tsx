@@ -16,7 +16,8 @@ export function AuthForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const { signIn, signUp } = useAuth()
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const { signIn, signUp, signInWithGoogle } = useAuth()
   const { toast } = useToast()
   const [justSignedUp, setJustSignedUp] = useState(false)
 
@@ -38,20 +39,6 @@ export function AuthForm() {
           title: "Signed in successfully",
           description: "Welcome back!",
         })
-
-        // Ensure user exists in users table
-        const { data: userData } = await supabase.auth.getUser()
-        if (userData.user) {
-          await supabase.from("users").upsert(
-            {
-              id: userData.user.id,
-              email: userData.user.email || "",
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "id" },
-          )
-        }
       }
     } catch (error) {
       console.error("Sign in error:", error)
@@ -84,19 +71,6 @@ export function AuthForm() {
           title: "Sign up successful",
           description: "Please check your email to confirm your account",
         })
-
-        // Ensure user exists in users table
-        if (user) {
-          await supabase.from("users").upsert(
-            {
-              id: user.id,
-              email: user.email || "",
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "id" },
-          )
-        }
       }
     } catch (error) {
       console.error("Sign up error:", error)
@@ -110,12 +84,37 @@ export function AuthForm() {
     }
   }
 
+  const handleGoogleSignIn = async () => {
+    setIsGoogleLoading(true)
+
+    try {
+      const { error } = await signInWithGoogle()
+
+      if (error) {
+        toast({
+          title: "Google sign in failed",
+          description: error.message,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Google sign in error:", error)
+      toast({
+        title: "Google sign in failed",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGoogleLoading(false)
+    }
+  }
+
   const handleManualVerification = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
@@ -131,19 +130,6 @@ export function AuthForm() {
           title: "Signed in successfully",
           description: "Your account has been verified!",
         })
-
-        // Ensure user exists in users table
-        if (data.user) {
-          await supabase.from("users").upsert(
-            {
-              id: data.user.id,
-              email: data.user.email || "",
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "id" },
-          )
-        }
       }
     } catch (error) {
       console.error("Verification error:", error)
@@ -203,9 +189,28 @@ export function AuthForm() {
                 </Link>
               </div>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex flex-col space-y-4">
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Signing in..." : "Sign In"}
+              </Button>
+
+              <div className="relative w-full">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handleGoogleSignIn}
+                disabled={isGoogleLoading}
+              >
+                {isGoogleLoading ? "Connecting..." : "Google"}
               </Button>
             </CardFooter>
           </form>
@@ -245,9 +250,28 @@ export function AuthForm() {
                 <p className="text-xs text-muted-foreground">Password must be at least 6 characters long</p>
               </div>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex flex-col space-y-4">
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Signing up..." : "Sign Up"}
+              </Button>
+
+              <div className="relative w-full">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handleGoogleSignIn}
+                disabled={isGoogleLoading}
+              >
+                {isGoogleLoading ? "Connecting..." : "Google"}
               </Button>
             </CardFooter>
             {justSignedUp && (
