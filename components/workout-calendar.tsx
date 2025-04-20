@@ -1,13 +1,24 @@
 "use client"
 
 import { useState } from "react"
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getMonth, getYear, addMonths, subMonths } from "date-fns"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  getMonth,
+  getYear,
+  addMonths,
+  subMonths,
+  isSameDay,
+} from "date-fns"
+import { ChevronLeft, ChevronRight, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import type { WorkoutEntry } from "../data/workout-history"
 
 interface WorkoutCalendarProps {
@@ -17,6 +28,8 @@ interface WorkoutCalendarProps {
 export function WorkoutCalendar({ workouts }: WorkoutCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [view, setView] = useState<"month" | "year">("month")
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   // Navigate to previous month
   const prevMonth = () => {
@@ -43,13 +56,14 @@ export function WorkoutCalendar({ workouts }: WorkoutCalendarProps) {
   const workoutsByDay = daysInMonth.map((day) => {
     const dayWorkouts = workouts.filter((workout) => {
       const workoutDate = new Date(workout.date)
-      return format(workoutDate, "yyyy-MM-dd") === format(day, "yyyy-MM-dd")
+      return isSameDay(workoutDate, day)
     })
 
     return {
       date: day,
       count: dayWorkouts.length,
       totalWeight: dayWorkouts.reduce((sum, workout) => sum + workout.totalWeight, 0),
+      workouts: dayWorkouts,
     }
   })
 
@@ -74,6 +88,22 @@ export function WorkoutCalendar({ workouts }: WorkoutCalendarProps) {
   // Calculate monthly stats
   const totalWorkoutsThisMonth = workoutsInMonth.length
   const averageWorkoutsPerWeek = totalWorkoutsThisMonth / 4 // Approximate
+
+  // Handle day click
+  const handleDayClick = (day: Date, dayWorkouts: WorkoutEntry[]) => {
+    if (dayWorkouts.length > 0) {
+      setSelectedDate(day)
+      setIsDialogOpen(true)
+    }
+  }
+
+  // Get workouts for selected date
+  const selectedDateWorkouts = selectedDate
+    ? workouts.filter((workout) => {
+        const workoutDate = new Date(workout.date)
+        return isSameDay(workoutDate, selectedDate)
+      })
+    : []
 
   return (
     <div className="space-y-4">
@@ -112,9 +142,10 @@ export function WorkoutCalendar({ workouts }: WorkoutCalendarProps) {
             {workoutsByDay.map((day, i) => (
               <div
                 key={i}
-                className={`h-8 sm:h-12 rounded-md flex flex-col items-center justify-center text-xs sm:text-sm border ${
-                  day.count > 0 ? "bg-primary/10 border-primary/20" : "border-gray-200"
-                }`}
+                className={`h-8 sm:h-12 rounded-md flex flex-col items-center justify-center text-xs sm:text-sm border 
+                  ${day.count > 0 ? "bg-primary/10 border-primary/20 cursor-pointer hover:bg-primary/20" : "border-gray-200"}
+                `}
+                onClick={() => handleDayClick(day.date, day.workouts)}
               >
                 <span className="font-medium">{format(day.date, "d")}</span>
                 {day.count > 0 && <span className="text-xs text-primary font-medium">{day.count}</span>}
@@ -212,6 +243,67 @@ export function WorkoutCalendar({ workouts }: WorkoutCalendarProps) {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog to show workouts for selected date */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Workouts on {selectedDate ? format(selectedDate, "MMMM d, yyyy") : ""}</span>
+              <DialogClose asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+                  <X className="h-4 w-4" />
+                </Button>
+              </DialogClose>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto py-4">
+            {selectedDateWorkouts.map((workout) => (
+              <Card key={workout.id} className="overflow-hidden">
+                <CardContent className="p-0">
+                  <div className="p-3 sm:p-4 flex items-center justify-between border-b">
+                    <div>
+                      <div className="font-medium text-sm sm:text-base">{workout.exercise}</div>
+                      <div className="text-xs sm:text-sm text-gray-500">{format(new Date(workout.date), "p")}</div>
+                    </div>
+                    {workout.isBodyweight ? (
+                      <div className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">Bodyweight</div>
+                    ) : (
+                      <div className="text-sm sm:text-base font-semibold">{workout.weight}kg</div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 divide-x text-center py-2">
+                    <div className="px-2">
+                      <div className="text-xs sm:text-sm text-gray-500">Sets</div>
+                      <div className="font-medium text-sm sm:text-base">
+                        {workout.completedSets}/{workout.sets}
+                      </div>
+                    </div>
+                    <div className="px-2">
+                      <div className="text-xs sm:text-sm text-gray-500">Reps</div>
+                      <div className="font-medium text-sm sm:text-base">{workout.reps}</div>
+                    </div>
+                    <div className="px-2">
+                      <div className="text-xs sm:text-sm text-gray-500">Total</div>
+                      <div className="font-medium text-sm sm:text-base">
+                        {workout.isBodyweight
+                          ? `${workout.reps * workout.completedSets} reps`
+                          : `${workout.totalWeight}kg`}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-800 px-3 sm:px-4 py-2 text-xs sm:text-sm">
+                    <div className="flex justify-between">
+                      <span>Duration:</span>
+                      <span className="font-medium">{Math.floor(workout.duration / 60)} min</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

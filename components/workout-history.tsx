@@ -5,9 +5,10 @@ import type { WorkoutEntry } from "../data/workout-history"
 
 interface WorkoutHistoryProps {
   workouts: WorkoutEntry[]
+  showDate?: boolean
 }
 
-export function WorkoutHistory({ workouts }: WorkoutHistoryProps) {
+export function WorkoutHistory({ workouts, showDate = true }: WorkoutHistoryProps) {
   if (workouts.length === 0) {
     return <div className="text-center text-sm text-gray-500 py-8">No workout history available</div>
   }
@@ -27,7 +28,9 @@ export function WorkoutHistory({ workouts }: WorkoutHistoryProps) {
               </div>
               <div className="p-3 sm:p-4 flex-1">
                 <div className="font-medium text-sm sm:text-base">{workout.exercise}</div>
-                <div className="text-xs sm:text-sm text-gray-500">{format(new Date(workout.date), "PPP p")}</div>
+                {showDate && (
+                  <div className="text-xs sm:text-sm text-gray-500">{format(new Date(workout.date), "PPP p")}</div>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-3 divide-x text-center py-2">
