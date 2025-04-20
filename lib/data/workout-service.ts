@@ -52,9 +52,13 @@ export const workoutService = {
 
       console.log("Saving workout for user:", userData.user.id, workout)
 
+      // Generate a UUID for the workout to avoid conflicts
+      const workoutId = crypto.randomUUID()
+
       const { data, error } = await supabase
         .from("workouts")
         .insert({
+          id: workoutId,
           user_id: userData.user.id,
           date: workout.date,
           exercise: workout.exercise,
@@ -65,12 +69,58 @@ export const workoutService = {
           total_weight: workout.totalWeight,
           duration: workout.duration,
           is_bodyweight: workout.isBodyweight || false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .select()
         .single()
 
       if (error) {
         console.error("Error saving workout:", error)
+
+        // If we get a conflict error, try a different approach
+        if (error.code === "23505" || error.status === 409) {
+          console.log("Conflict detected, trying alternative approach")
+
+          // Try without specifying the ID
+          const { data: retryData, error: retryError } = await supabase
+            .from("workouts")
+            .insert({
+              user_id: userData.user.id,
+              date: workout.date,
+              exercise: workout.exercise,
+              weight: workout.weight,
+              reps: workout.reps,
+              sets: workout.sets,
+              completed_sets: workout.completedSets,
+              total_weight: workout.totalWeight,
+              duration: workout.duration,
+              is_bodyweight: workout.isBodyweight || false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .select()
+            .single()
+
+          if (retryError) {
+            console.error("Retry error saving workout:", retryError)
+            throw retryError
+          }
+
+          return {
+            id: retryData.id,
+            date: retryData.date,
+            exercise: retryData.exercise,
+            weight: retryData.weight,
+            reps: retryData.reps,
+            sets: retryData.sets,
+            completedSets: retryData.completed_sets,
+            totalWeight: retryData.total_weight,
+            duration: retryData.duration,
+            isBodyweight: retryData.is_bodyweight,
+          }
+        }
+
         throw error
       }
 
@@ -95,7 +145,13 @@ export const workoutService = {
   // Delete a workout
   async deleteWorkout(id: string): Promise<void> {
     try {
-      const { error } = await supabase.from("workouts").delete().eq("id", id)
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+
+      if (userError || !userData.user) {
+        throw new Error("User not authenticated")
+      }
+
+      const { error } = await supabase.from("workouts").delete().eq("id", id).eq("user_id", userData.user.id)
 
       if (error) {
         console.error("Error deleting workout:", error)
@@ -140,13 +196,40 @@ export const workoutService = {
         throw new Error("User not authenticated")
       }
 
+      // Generate a UUID for the exercise to avoid conflicts
+      const exerciseId = crypto.randomUUID()
+
       const { error } = await supabase.from("custom_exercises").insert({
+        id: exerciseId,
         user_id: userData.user.id,
         name,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
 
       if (error) {
         console.error("Error saving custom exercise:", error)
+
+        // If we get a conflict error, try a different approach
+        if (error.code === "23505" || error.status === 409) {
+          console.log("Conflict detected, trying alternative approach")
+
+          // Try without specifying the ID
+          const { error: retryError } = await supabase.from("custom_exercises").insert({
+            user_id: userData.user.id,
+            name,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+
+          if (retryError) {
+            console.error("Retry error saving custom exercise:", retryError)
+            throw retryError
+          }
+
+          return
+        }
+
         throw error
       }
     } catch (error) {
