@@ -5,10 +5,20 @@ import type { Database } from "./supabase/database.types"
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// Create a Supabase client
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-  },
-})
+// Create a singleton instance of the Supabase client
+let supabaseInstance: ReturnType<typeof createClient<Database>> | null = null
+
+export const getSupabase = () => {
+  if (!supabaseInstance) {
+    supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+    })
+  }
+  return supabaseInstance
+}
+
+// For backward compatibility
+export const supabase = getSupabase()

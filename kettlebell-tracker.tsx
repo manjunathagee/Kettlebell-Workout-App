@@ -33,7 +33,7 @@ import { useAuth } from "./lib/auth/auth-context"
 import { workoutService } from "./lib/data/workout-service"
 import { AuthForm } from "./components/auth/auth-form"
 import { UserProfile } from "./components/auth/user-profile"
-import { supabase } from "./lib/supabase"
+import { getSupabase } from "./lib/supabase"
 import { localStorageService } from "./lib/data/local-storage-service"
 
 // Default exercise types
@@ -398,7 +398,7 @@ export default function KettlebellTracker() {
   // Debug user authentication status
   useEffect(() => {
     const checkAuth = async () => {
-      const { data, error } = await supabase.auth.getSession()
+      const { data, error } = await getSupabase().auth.getSession()
       console.log("Auth session:", data.session, "Error:", error)
 
       if (data.session) {

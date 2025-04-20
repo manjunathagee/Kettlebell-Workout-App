@@ -1,4 +1,4 @@
-import { supabase } from "../supabase"
+import { getSupabase } from "../supabase"
 import type { WorkoutEntry } from "./workout-types"
 import { localStorageService } from "./local-storage-service"
 
@@ -9,7 +9,7 @@ export const workoutService = {
       console.log("Ensuring user exists in users table:", userId)
 
       // First check if user already exists
-      const { data, error } = await supabase.from("users").select("id").eq("id", userId).single()
+      const { data, error } = await getSupabase().from("users").select("id").eq("id", userId).single()
 
       if (error && error.code !== "PGRST116") {
         // PGRST116 is "no rows returned" error
@@ -20,12 +20,14 @@ export const workoutService = {
       // If user doesn't exist, create it
       if (!data) {
         console.log("User doesn't exist, creating record for:", userId)
-        const { error: insertError } = await supabase.from("users").insert({
-          id: userId,
-          email: email || "",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
+        const { error: insertError } = await getSupabase()
+          .from("users")
+          .insert({
+            id: userId,
+            email: email || "",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
 
         if (insertError) {
           console.error("Error creating user record:", insertError)
@@ -33,7 +35,7 @@ export const workoutService = {
         }
 
         // Verify the user was created
-        const { data: verifyData, error: verifyError } = await supabase
+        const { data: verifyData, error: verifyError } = await getSupabase()
           .from("users")
           .select("id")
           .eq("id", userId)
@@ -73,7 +75,7 @@ export const workoutService = {
         return localWorkouts
       }
 
-      const { data: userData, error: userError } = await supabase.auth.getUser()
+      const { data: userData, error: userError } = await getSupabase().auth.getUser()
 
       if (userError || !userData.user) {
         console.error("User not authenticated:", userError)
@@ -92,7 +94,7 @@ export const workoutService = {
       // Try to sync any pending uploads
       await this.syncPendingUploads(userData.user.id)
 
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("workouts")
         .select("*")
         .eq("user_id", userData.user.id)
@@ -159,7 +161,7 @@ export const workoutService = {
           is_bodyweight: workout.isBodyweight || false,
         }
 
-        const { error } = await supabase.from("workouts").insert(workoutData)
+        const { error } = await getSupabase().from("workouts").insert(workoutData)
 
         if (error) {
           console.error("Error syncing pending upload:", error)
@@ -191,7 +193,7 @@ export const workoutService = {
         return workoutWithId
       }
 
-      const { data: userData, error: userError } = await supabase.auth.getUser()
+      const { data: userData, error: userError } = await getSupabase().auth.getUser()
 
       if (userError || !userData.user) {
         console.log("User not authenticated: saving workout to pending uploads")
@@ -226,7 +228,7 @@ export const workoutService = {
       console.log("Inserting workout data:", workoutData)
 
       // Insert without returning data first
-      const { error } = await supabase.from("workouts").insert(workoutData)
+      const { error } = await getSupabase().from("workouts").insert(workoutData)
 
       if (error) {
         console.error("Error saving workout:", error)
@@ -237,7 +239,7 @@ export const workoutService = {
       console.log("Workout saved successfully")
 
       // Then fetch the latest workouts
-      const { data, error: fetchError } = await supabase
+      const { data, error: fetchError } = await getSupabase()
         .from("workouts")
         .select("*")
         .eq("user_id", userData.user.id)
@@ -292,14 +294,14 @@ export const workoutService = {
         return
       }
 
-      const { data: userData, error: userError } = await supabase.auth.getUser()
+      const { data: userData, error: userError } = await getSupabase().auth.getUser()
 
       if (userError || !userData.user) {
         console.log("User not authenticated: skipping server delete")
         return
       }
 
-      const { error } = await supabase.from("workouts").delete().eq("id", id).eq("user_id", userData.user.id)
+      const { error } = await getSupabase().from("workouts").delete().eq("id", id).eq("user_id", userData.user.id)
 
       if (error) {
         console.error("Error deleting workout:", error)
@@ -321,7 +323,7 @@ export const workoutService = {
         return localExercises
       }
 
-      const { data: userData, error: userError } = await supabase.auth.getUser()
+      const { data: userData, error: userError } = await getSupabase().auth.getUser()
 
       if (userError || !userData.user) {
         console.error("User not authenticated:", userError)
@@ -335,7 +337,10 @@ export const workoutService = {
         return localExercises // Return local exercises if user doesn't exist
       }
 
-      const { data, error } = await supabase.from("custom_exercises").select("name").eq("user_id", userData.user.id)
+      const { data, error } = await getSupabase()
+        .from("custom_exercises")
+        .select("name")
+        .eq("user_id", userData.user.id)
 
       if (error) {
         console.error("Error fetching custom exercises:", error)
@@ -370,7 +375,7 @@ export const workoutService = {
         return
       }
 
-      const { data: userData, error: userError } = await supabase.auth.getUser()
+      const { data: userData, error: userError } = await getSupabase().auth.getUser()
 
       if (userError || !userData.user) {
         console.log("User not authenticated: skipping server save for custom exercise")
@@ -385,7 +390,7 @@ export const workoutService = {
       }
 
       // Simple insert without returning data
-      const { error } = await supabase.from("custom_exercises").insert({
+      const { error } = await getSupabase().from("custom_exercises").insert({
         user_id: userData.user.id,
         name,
       })
@@ -410,14 +415,14 @@ export const workoutService = {
         return
       }
 
-      const { data: userData, error: userError } = await supabase.auth.getUser()
+      const { data: userData, error: userError } = await getSupabase().auth.getUser()
 
       if (userError || !userData.user) {
         console.log("User not authenticated: skipping server delete for custom exercise")
         return
       }
 
-      const { error } = await supabase
+      const { error } = await getSupabase()
         .from("custom_exercises")
         .delete()
         .eq("name", name)
@@ -443,7 +448,7 @@ export const workoutService = {
         return
       }
 
-      const { data: userData, error: userError } = await supabase.auth.getUser()
+      const { data: userData, error: userError } = await getSupabase().auth.getUser()
 
       if (userError || !userData.user) {
         console.log("User not authenticated: skipping server data clear")
@@ -451,14 +456,17 @@ export const workoutService = {
       }
 
       // Delete all workouts for the user
-      const { error: workoutsError } = await supabase.from("workouts").delete().eq("user_id", userData.user.id)
+      const { error: workoutsError } = await getSupabase().from("workouts").delete().eq("user_id", userData.user.id)
 
       if (workoutsError) {
         console.error("Error deleting workouts:", workoutsError)
       }
 
       // Delete all custom exercises for the user
-      const { error: exercisesError } = await supabase.from("custom_exercises").delete().eq("user_id", userData.user.id)
+      const { error: exercisesError } = await getSupabase()
+        .from("custom_exercises")
+        .delete()
+        .eq("user_id", userData.user.id)
 
       if (exercisesError) {
         console.error("Error deleting custom exercises:", exercisesError)

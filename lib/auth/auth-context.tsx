@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
-import { supabase } from "../supabase"
+import { getSupabase } from "../supabase"
 import type { Session, User } from "@supabase/supabase-js"
 
 type AuthContextType = {
@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const {
           data: { session },
           error,
-        } = await supabase.auth.getSession()
+        } = await getSupabase().auth.getSession()
 
         if (error) {
           throw error
@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set up auth state listener
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = getSupabase().auth.onAuthStateChange(async (event, session) => {
       console.log("Auth state changed:", event, session?.user?.id)
 
       setSession(session)
@@ -116,7 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data, error } = await getSupabase().auth.signInWithPassword({ email, password })
 
       if (data.user && !error) {
         await ensureUserExists(data.user)
@@ -139,7 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
       }
 
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error } = await getSupabase().auth.signUp({
         email,
         password,
         options: {
@@ -169,7 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
       }
 
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { error } = await getSupabase().auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: redirectUrl,
@@ -184,7 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
+    await getSupabase().auth.signOut()
   }
 
   const value = {

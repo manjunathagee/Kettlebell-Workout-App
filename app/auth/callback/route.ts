@@ -1,5 +1,5 @@
-import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { getSupabase } from "@/lib/supabase"
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
@@ -21,8 +21,7 @@ export async function GET(request: Request) {
   // If there's a code, exchange it for a session
   if (code) {
     try {
-      const supabase = createServerSupabaseClient()
-      const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+      const { data, error } = await getSupabase().auth.exchangeCodeForSession(code)
 
       if (error) {
         throw error
@@ -33,7 +32,7 @@ export async function GET(request: Request) {
         console.log("Creating/updating user in callback route:", data.user.id)
 
         // First check if user already exists
-        const { data: existingUser, error: checkError } = await supabase
+        const { data: existingUser, error: checkError } = await getSupabase()
           .from("users")
           .select("id")
           .eq("id", data.user.id)
@@ -46,12 +45,14 @@ export async function GET(request: Request) {
 
         // If user doesn't exist, create it
         if (!existingUser) {
-          const { error: insertError } = await supabase.from("users").insert({
-            id: data.user.id,
-            email: data.user.email || "",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
+          const { error: insertError } = await getSupabase()
+            .from("users")
+            .insert({
+              id: data.user.id,
+              email: data.user.email || "",
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
 
           if (insertError) {
             console.error("Error creating user record:", insertError)
@@ -60,7 +61,7 @@ export async function GET(request: Request) {
           }
 
           // Verify the user was created
-          const { data: verifyData, error: verifyError } = await supabase
+          const { data: verifyData, error: verifyError } = await getSupabase()
             .from("users")
             .select("id")
             .eq("id", data.user.id)
