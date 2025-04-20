@@ -85,11 +85,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = async (email: string, password: string) => {
     try {
+      // Determine the correct redirect URL
+      let redirectUrl = `${window.location.origin}/auth/callback`
+
+      // If we're in development but want to test with a specific URL
+      if (process.env.NEXT_PUBLIC_SITE_URL) {
+        redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: redirectUrl,
         },
       })
 

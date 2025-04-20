@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import Link from "next/link"
 
 import { useState } from "react"
 import { useAuth } from "@/lib/auth/auth-context"
@@ -9,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
+import { supabase } from "@/lib/supabase"
 
 export function AuthForm() {
   const [email, setEmail] = useState("")
@@ -16,6 +18,7 @@ export function AuthForm() {
   const [isLoading, setIsLoading] = useState(false)
   const { signIn, signUp } = useAuth()
   const { toast } = useToast()
+  const [justSignedUp, setJustSignedUp] = useState(false)
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -62,6 +65,7 @@ export function AuthForm() {
           variant: "destructive",
         })
       } else {
+        setJustSignedUp(true) // Set this to true on successful signup
         toast({
           title: "Sign up successful",
           description: "Please check your email to confirm your account",
@@ -71,6 +75,40 @@ export function AuthForm() {
       console.error("Sign up error:", error)
       toast({
         title: "Sign up failed",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleManualVerification = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) {
+        toast({
+          title: "Verification failed",
+          description: error.message,
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Signed in successfully",
+          description: "Your account has been verified!",
+        })
+      }
+    } catch (error) {
+      console.error("Verification error:", error)
+      toast({
+        title: "Verification failed",
         description: "An unexpected error occurred",
         variant: "destructive",
       })
@@ -118,6 +156,11 @@ export function AuthForm() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
+              </div>
+              <div className="text-right">
+                <Link href="/auth/verify" className="text-xs text-muted-foreground hover:underline">
+                  Having trouble signing in?
+                </Link>
               </div>
             </CardContent>
             <CardFooter>
@@ -167,6 +210,18 @@ export function AuthForm() {
                 {isLoading ? "Signing up..." : "Sign Up"}
               </Button>
             </CardFooter>
+            {justSignedUp && (
+              <div className="mt-4 p-4 bg-muted rounded-md">
+                <h3 className="font-medium mb-2">Having trouble with the verification email?</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  If you don't receive the email or the link doesn't work, you can try signing in directly with your
+                  credentials.
+                </p>
+                <Button onClick={handleManualVerification} className="w-full" variant="outline" disabled={isLoading}>
+                  {isLoading ? "Verifying..." : "Try signing in directly"}
+                </Button>
+              </div>
+            )}
           </form>
         </TabsContent>
       </Tabs>
