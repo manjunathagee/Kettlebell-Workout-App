@@ -282,6 +282,51 @@ export const workoutService = {
     }
   },
 
+  // Update an existing workout
+  async updateWorkout(workout: WorkoutEntry): Promise<WorkoutEntry> {
+    try {
+      // Always update local storage first
+      localStorageService.updateWorkout(workout)
+
+      // If offline, return the updated workout
+      if (!this.isOnline()) {
+        console.log("Offline: skipping server update")
+        return workout
+      }
+
+      const { data: userData, error: userError } = await getSupabase().auth.getUser()
+
+      if (userError || !userData.user) {
+        console.log("User not authenticated: skipping server update")
+        return workout
+      }
+
+      // Update the workout in Supabase
+      const { error } = await getSupabase()
+        .from("workouts")
+        .update({
+          weight: workout.weight,
+          reps: workout.reps,
+          sets: workout.sets,
+          completed_sets: workout.completedSets,
+          total_weight: workout.totalWeight,
+          is_bodyweight: workout.isBodyweight || false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", workout.id)
+        .eq("user_id", userData.user.id)
+
+      if (error) {
+        console.error("Error updating workout:", error)
+      }
+
+      return workout
+    } catch (error) {
+      console.error("Error in updateWorkout:", error)
+      return workout
+    }
+  },
+
   // Delete a workout
   async deleteWorkout(id: string): Promise<void> {
     try {

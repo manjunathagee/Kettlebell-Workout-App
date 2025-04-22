@@ -36,6 +36,21 @@ export const localStorageService = {
     }
   },
 
+  // Update a workout in local storage
+  updateWorkout(updatedWorkout: WorkoutEntry): void {
+    try {
+      const workouts = this.getWorkouts()
+      const index = workouts.findIndex((workout) => workout.id === updatedWorkout.id)
+
+      if (index !== -1) {
+        workouts[index] = updatedWorkout
+        this.saveWorkouts(workouts)
+      }
+    } catch (error) {
+      console.error("Error updating workout in local storage:", error)
+    }
+  },
+
   // Delete a workout from local storage
   deleteWorkout(id: string): void {
     try {

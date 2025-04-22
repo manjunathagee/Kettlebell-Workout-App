@@ -742,7 +742,23 @@ export default function KettlebellTracker() {
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                       </div>
                     ) : (
-                      <WorkoutHistory workouts={workoutHistory} />
+                      <WorkoutHistory
+                        workouts={workoutHistory}
+                        customExercises={customExercises}
+                        onWorkoutUpdated={async () => {
+                          // Reload workouts after an update
+                          setIsLoading(true)
+                          try {
+                            const workouts = await workoutService.getWorkouts()
+                            setWorkoutHistory(workouts)
+                            setWorkoutStats(calculateStatistics(workouts))
+                          } catch (error) {
+                            console.error("Error reloading workouts:", error)
+                          } finally {
+                            setIsLoading(false)
+                          }
+                        }}
+                      />
                     )}
                   </CardContent>
                 </Card>

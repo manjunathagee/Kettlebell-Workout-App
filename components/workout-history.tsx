@@ -2,19 +2,44 @@
 
 import { useState } from "react"
 import { format } from "date-fns"
-import { Dumbbell, User, ChevronLeft, ChevronRight } from "lucide-react"
+import { Dumbbell, User, ChevronLeft, ChevronRight, Edit2, Trash2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import type { WorkoutEntry } from "../data/workout-history"
+import { EditWorkoutDialog } from "./edit-workout-dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import type { WorkoutEntry } from "../lib/data/workout-types"
+import { workoutService } from "../lib/data/workout-service"
 
 interface WorkoutHistoryProps {
   workouts: WorkoutEntry[]
   showDate?: boolean
   itemsPerPage?: number
+  onWorkoutUpdated?: () => void
+  customExercises?: string[]
 }
 
-export function WorkoutHistory({ workouts, showDate = true, itemsPerPage = 5 }: WorkoutHistoryProps) {
+export function WorkoutHistory({
+  workouts,
+  showDate = true,
+  itemsPerPage = 5,
+  onWorkoutUpdated,
+  customExercises = [],
+}: WorkoutHistoryProps) {
   const [currentPage, setCurrentPage] = useState(1)
+  const [editingWorkout, setEditingWorkout] = useState<WorkoutEntry | null>(null)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [workoutToDelete, setWorkoutToDelete] = useState<string | null>(null)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
   if (workouts.length === 0) {
     return <div className="text-center text-sm text-gray-500 py-8">No workout history available</div>
@@ -35,6 +60,52 @@ export function WorkoutHistory({ workouts, showDate = true, itemsPerPage = 5 }: 
     setCurrentPage((prev) => Math.max(prev - 1, 1))
   }
 
+  // Handle edit workout
+  const handleEditWorkout = (workout: WorkoutEntry) => {
+    setEditingWorkout(workout)
+    setIsEditDialogOpen(true)
+  }
+
+  // Handle save edited workout
+  const handleSaveWorkout = async (updatedWorkout: WorkoutEntry) => {
+    setIsLoading(true)
+    try {
+      await workoutService.updateWorkout(updatedWorkout)
+      if (onWorkoutUpdated) {
+        onWorkoutUpdated()
+      }
+    } catch (error) {
+      console.error("Error updating workout:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Handle delete workout
+  const handleDeleteClick = (workoutId: string) => {
+    setWorkoutToDelete(workoutId)
+    setIsDeleteDialogOpen(true)
+  }
+
+  // Handle confirm delete
+  const handleConfirmDelete = async () => {
+    if (!workoutToDelete) return
+
+    setIsLoading(true)
+    try {
+      await workoutService.deleteWorkout(workoutToDelete)
+      if (onWorkoutUpdated) {
+        onWorkoutUpdated()
+      }
+    } catch (error) {
+      console.error("Error deleting workout:", error)
+    } finally {
+      setIsLoading(false)
+      setIsDeleteDialogOpen(false)
+      setWorkoutToDelete(null)
+    }
+  }
+
   return (
     <div className="space-y-3 sm:space-y-4">
       {currentWorkouts.map((workout) => (
@@ -53,6 +124,21 @@ export function WorkoutHistory({ workouts, showDate = true, itemsPerPage = 5 }: 
                 {showDate && (
                   <div className="text-xs sm:text-sm text-gray-500">{format(new Date(workout.date), "PPP p")}</div>
                 )}
+              </div>
+              <div className="flex pr-3">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditWorkout(workout)}>
+                  <Edit2 className="h-4 w-4" />
+                  <span className="sr-only">Edit workout</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive"
+                  onClick={() => handleDeleteClick(workout.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="sr-only">Delete workout</span>
+                </Button>
               </div>
             </div>
             <div className="grid grid-cols-3 divide-x text-center py-2">
@@ -130,6 +216,37 @@ export function WorkoutHistory({ workouts, showDate = true, itemsPerPage = 5 }: 
           </div>
         </div>
       )}
+
+      {/* Edit Workout Dialog */}
+      <EditWorkoutDialog
+        workout={editingWorkout}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        onSave={handleSaveWorkout}
+        customExercises={customExercises}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Workout</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this workout? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={isLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isLoading ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
